@@ -1418,7 +1418,7 @@ class GCENodeDriver(NodeDriver):
         return self.ex_get_targetpool(name, region)
 
     def create_volume(self, size, name, location=None, snapshot=None,
-                      image=None, use_existing=True):
+                      image=None, use_existing=True, type=None):
         """
         Create a volume (disk).
 
@@ -1444,11 +1444,15 @@ class GCENodeDriver(NodeDriver):
                                 of attempting to create a new disk.
         :type     use_existing: ``bool``
 
+        :keyword  type: Special type for the disk (for example, SSD) if any.
+        :type     type: ``str`` - either ``None`` or a type specifier (for
+                        SSD: "/projects/$/zones/$/diskTypes/pd-ssd").
+
         :return:  Storage Volume object
         :rtype:   :class:`StorageVolume`
         """
         request, volume_data, params = self._create_vol_req(
-            size, name, location, snapshot, image)
+            size, name, location, snapshot, image, type)
         try:
             self.connection.async_request(request, method='POST',
                                           data=volume_data, params=params)
@@ -2940,7 +2944,7 @@ class GCENodeDriver(NodeDriver):
                                               node_attrs['location'])
 
     def _create_vol_req(self, size, name, location=None, snapshot=None,
-                        image=None):
+                        image=None, type=None):
         """
         Assemble the request/data for creating a volume.
 
@@ -2962,6 +2966,9 @@ class GCENodeDriver(NodeDriver):
 
         :keyword  image: Image to create disk from.
         :type     image: :class:`GCENodeImage` or ``str`` or ``None``
+
+        :keyword  type: Type of disk to create. Either ``str`` or ``None``.
+        :type     type: either ``None`` or ``str``
 
         :return:  Tuple containing the request string, the data dictionary and
                   the URL parameters
@@ -2990,6 +2997,8 @@ class GCENodeDriver(NodeDriver):
         location = location or self.zone
         if not hasattr(location, 'name'):
             location = self.ex_get_zone(location)
+        if type: volume_data['type'] = type
+
         request = '/zones/%s/disks' % (location.name)
 
         return request, volume_data, params
