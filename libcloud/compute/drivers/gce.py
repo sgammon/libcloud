@@ -2800,10 +2800,10 @@ class GCENodeDriver(NodeDriver):
         node_data['networkInterfaces'] = ni
 
         if ip_forwarding: node_data['canIpForward'] = True
-        if service_scopes: node_data['serviceAccounts'] = {
+        if service_scopes: node_data['serviceAccounts'] = [{
             'email': 'default',
             'scopes': service_scopes
-        }
+        }]
 
         request = '/zones/%s/instances' % (location.name)
 
