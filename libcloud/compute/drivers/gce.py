@@ -1139,6 +1139,7 @@ class GCENodeDriver(NodeDriver):
 
     def create_node(self, name, size, image, location=None,
                     ex_network='default', ex_tags=None, ex_metadata=None,
+                    ex_ip_forwarding=False, ex_service_scopes=None,
                     ex_boot_disk=None, use_existing_disk=True,
                     external_ip='ephemeral'):
         """
@@ -1166,6 +1167,13 @@ class GCENodeDriver(NodeDriver):
 
         :keyword  ex_metadata: Metadata dictionary for instance.
         :type     ex_metadata: ``dict`` or ``None``
+
+        :keyword  ex_ip_forwarding: Whether the instance can forward traffic.
+        :type     ex_ip_forwarding: ``True`` or ``False``.
+
+        :keyword  ex_service_scopes: OAuth2 scopes that should be preconfigured
+                                     with an instance's service account.
+        :type     ex_service_scopes: ``list`` of ``str`` scope suffixes
 
         :keyword  ex_boot_disk: The boot disk to attach to the instance.
         :type     ex_boot_disk: :class:`StorageVolume` or ``str``
@@ -1204,9 +1212,19 @@ class GCENodeDriver(NodeDriver):
             ex_metadata = {"items": [{"key": k, "value": v}
                                      for k, v in ex_metadata.items()]}
 
+        service_scopes = []
+        if ex_service_scopes:
+            for scope in ex_service_scopes:
+                if not scope.startswith('https://www.googleapis.com/auth/'):
+                    service_scopes.append('/'.join([
+                        'https://www.googleapis.com/auth',
+                        scope]))
+
         request, node_data = self._create_node_req(name, size, image,
                                                    location, ex_network,
                                                    ex_tags, ex_metadata,
+                                                   ex_ip_forwarding,
+                                                   service_scopes,
                                                    ex_boot_disk, external_ip)
         self.connection.async_request(request, method='POST', data=node_data)
 
@@ -2698,8 +2716,8 @@ class GCENodeDriver(NodeDriver):
         return zone
 
     def _create_node_req(self, name, size, image, location, network,
-                         tags=None, metadata=None, boot_disk=None,
-                         external_ip='ephemeral'):
+                         tags=None, metadata=None, ip_forwarding=False,
+                         service_scopes=None, boot_disk=None, external_ip='ephemeral'):
         """
         Returns a request and body to create a new node.  This is a helper
         method to support both :class:`create_node` and
@@ -2726,6 +2744,13 @@ class GCENodeDriver(NodeDriver):
 
         :keyword  metadata: Metadata dictionary for instance.
         :type     metadata: ``dict``
+
+        :keyword  ip_forwarding: Flag to allow the instance to forward traffic.
+        :type     ip_forwarding: ``bool``
+
+        :keyword  service_scopes: Array of OAuth2 Google scopes to grant to
+                                  the instance's attached service account.
+        :type     service_scopes: ``list`` of ``str``
 
         :keyword  boot_disk:  Persistent boot disk to attach.
         :type     :class:`StorageVolume`
@@ -2769,6 +2794,12 @@ class GCENodeDriver(NodeDriver):
                 access_configs[0]['natIP'] = external_ip.address
             ni[0]['accessConfigs'] = access_configs
         node_data['networkInterfaces'] = ni
+
+        if ip_forwarding: node_data['canIpForward'] = True
+        if service_scopes: node_data['serviceAccounts'] = {
+            'email': 'default',
+            'scopes': service_scopes
+        }
 
         request = '/zones/%s/instances' % (location.name)
 
