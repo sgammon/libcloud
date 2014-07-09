@@ -1140,8 +1140,8 @@ class GCENodeDriver(NodeDriver):
     def create_node(self, name, size, image, location=None,
                     ex_network='default', ex_tags=None, ex_metadata=None,
                     ex_ip_forwarding=False, ex_service_scopes=None,
-                    ex_boot_disk=None, use_existing_disk=True,
-                    external_ip='ephemeral'):
+                    ex_boot_disk=None, ex_boot_disk_auto_delete=False,
+                    use_existing_disk=True, external_ip='ephemeral'):
         """
         Create a new node and return a node object for the node.
 
@@ -1177,6 +1177,11 @@ class GCENodeDriver(NodeDriver):
 
         :keyword  ex_boot_disk: The boot disk to attach to the instance.
         :type     ex_boot_disk: :class:`StorageVolume` or ``str``
+
+        :keyword  ex_boot_disk_auto_delete: Boolean flag to automatically
+                                            delete the instance's boot volume
+                                            upon instance termination.
+        :type     ex_boot_disk_auto_delete: ``False`` (default) or ``True``.
 
         :keyword  use_existing_disk: If True and if an existing disk with the
                                      same name/location is found, use that
@@ -1225,7 +1230,9 @@ class GCENodeDriver(NodeDriver):
                                                    ex_tags, ex_metadata,
                                                    ex_ip_forwarding,
                                                    service_scopes,
-                                                   ex_boot_disk, external_ip)
+                                                   ex_boot_disk,
+                                                   ex_boot_disk_auto_delete,
+                                                   external_ip)
         self.connection.async_request(request, method='POST', data=node_data)
 
         return self.ex_get_node(name, location.name)
@@ -2721,7 +2728,8 @@ class GCENodeDriver(NodeDriver):
 
     def _create_node_req(self, name, size, image, location, network,
                          tags=None, metadata=None, ip_forwarding=False,
-                         service_scopes=None, boot_disk=None, external_ip='ephemeral'):
+                         service_scopes=None, boot_disk=None,
+                         external_ip='ephemeral', auto_delete=False):
         """
         Returns a request and body to create a new node.  This is a helper
         method to support both :class:`create_node` and
@@ -2759,6 +2767,10 @@ class GCENodeDriver(NodeDriver):
         :keyword  boot_disk:  Persistent boot disk to attach.
         :type     :class:`StorageVolume`
 
+        :keyword  auto_delete: Flag to auto-delete persistent boot disk on
+                               instance termination.
+        :keyword  auto_delete: ``False`` (default) or ``True``.
+
         :keyword  external_ip: The external IP address to use.  If 'ephemeral'
                                (default), a new non-static address will be
                                used.  If 'None', then no external address will
@@ -2778,14 +2790,15 @@ class GCENodeDriver(NodeDriver):
             node_data['metadata'] = metadata
 
         if boot_disk:
-            disks = [{'kind': 'compute#attachedDisk',
+            disk = {  'kind': 'compute#attachedDisk',
                       'boot': True,
                       'type': 'PERSISTENT',
                       'mode': 'READ_WRITE',
                       'deviceName': boot_disk.name,
                       'zone': boot_disk.extra['zone'].extra['selfLink'],
-                      'source': boot_disk.extra['selfLink']}]
-            node_data['disks'] = disks
+                      'source': boot_disk.extra['selfLink'] }
+            if auto_delete: disk['autoDelete'] = True
+            node_data['disks'] = [disk]
         else:
             node_data['image'] = image.extra['selfLink']
 
